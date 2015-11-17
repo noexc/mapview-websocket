@@ -1,0 +1,25 @@
+name:                mapview-websocket
+version:             1
+synopsis:            Websocket infrastructure for mapview v3+
+homepage:            https://mapview.noexc.org/
+license:             MIT
+license-file:        LICENSE
+author:              Ricky Elrod
+maintainer:          ricky@elrod.me
+copyright:           (c) 2015 Ricky Elrod
+category:            KD8ZRC
+build-type:          Simple
+cabal-version:       >=1.10
+
+library
+  exposed-modules:     KD8ZRC.Mapview.Utility.Websocket
+  -- other-modules:
+  -- other-extensions:
+  build-depends:       base >= 4 && < 5
+                     , text >= 1.1
+                     , transformers >= 0.3 && < 0.5
+                     , uuid >= 1.3
+                     , websockets >= 0.9 && < 0.10
+                     , mapview
+  hs-source-dirs:      src
+  default-language:    Haskell2010
