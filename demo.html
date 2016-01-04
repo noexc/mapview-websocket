@@ -1,0 +1,17 @@
+<!doctype html>
+<html>
+  <head>
+    <title>Websocket Demo</title>
+    <script>
+      var s = new WebSocket("ws://127.0.0.1:8181");
+      s.onmessage = function(event) {
+          console.log(event.data);
+      }
+      s.onclose = function(event) {
+          console.log('*** socket closed');
+      }
+    </script>
+  </head>
+  <body>
+  </body>
+</html>
