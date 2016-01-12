@@ -17,14 +17,16 @@ import qualified Control.Concurrent.Chan as Chan
 import Control.Exception (finally)
 import Control.Monad
 import Control.Monad.IO.Class
+import qualified Data.ByteString.Char8 as BS
 import qualified Data.Text as T
+import qualified Data.Text.Encoding as T
 import qualified Data.Text.IO as T
 import qualified Data.UUID as UUID
 import qualified Data.UUID.V4 as UUIDv4
 import KD8ZRC.Mapview.Types
 import qualified Network.WebSockets as WS
 
-type Client = (String, Chan.Chan T.Text)
+type Client = (String, Chan.Chan BS.ByteString)
 type ServerState = [Client]
 
 data WebsocketServer = WebsocketServer (MVar ServerState)
@@ -43,7 +45,7 @@ data WebsocketServer = WebsocketServer (MVar ServerState)
 -- As MapView updates @rawChan@ (via the 'writeChanRaw' callback),
 -- @mapview-websocket@ will see the updates and broadcast them to clients as
 -- soon as it can.
-initWebsocketServer :: Chan.Chan T.Text -> String -> Int -> IO ()
+initWebsocketServer :: Chan.Chan BS.ByteString -> String -> Int -> IO ()
 initWebsocketServer chan host port = do
   m <- newMVar []
   _ <- forkIO (broadcast chan m)
@@ -55,11 +57,10 @@ addClient = (:)
 removeClient :: Client -> ServerState -> ServerState
 removeClient client = filter ((/= fst client) . fst)
 
-broadcast :: Chan.Chan T.Text -> MVar ServerState -> IO ()
+broadcast :: Chan.Chan BS.ByteString -> MVar ServerState -> IO ()
 broadcast msg' clients' = forever $ do
   msg <- readChan msg'
   clients <- readMVar clients'
-  T.putStrLn msg
   sequence $ (flip Chan.writeChan msg . snd) `fmap` clients
 
 application :: MVar ServerState -> WS.ServerApp
@@ -74,7 +75,7 @@ application st pending = do
     return s'
   flip finally (disconnect client) $ forever $ do
     msg <- readChan chan
-    WS.sendTextData conn msg
+    WS.sendTextData conn (T.decodeUtf8 msg)
   where
     disconnect client = do
       modifyMVar st $ \s ->
