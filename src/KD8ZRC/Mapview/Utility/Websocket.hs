@@ -31,6 +31,20 @@ type ServerState = [Client]
 
 data WebsocketServer = WebsocketServer (MVar ServerState)
 
+-- | These callbacks get called when a client connects to the websocket. They
+-- can be used to send a welcome message of sorts, or more practically, a
+-- history of previous downlink packet information.
+newtype WebsocketOnConnectCallback =
+  WebsocketOnConnectCallback (Client -> IO ())
+
+-- | A simple wrapper to call a 'WebsocketOnConnectCallback' with a given
+-- 'Client'.
+callOnConnectCallback
+  :: WebsocketOnConnectCallback
+  -> Client
+  -> IO ()
+callOnConnectCallback (WebsocketOnConnectCallback f) c = f c
+
 -- | To make use of @mapview-websocket@ in your MapView application, start off
 -- by initializing a new 'Chan.Chan T.Text'. To do this, in your @main@'
 -- function, write @rawChan <- Chan.newChan@. This should get passed to your
@@ -45,11 +59,16 @@ data WebsocketServer = WebsocketServer (MVar ServerState)
 -- As MapView updates @rawChan@ (via the 'writeChanRaw' callback),
 -- @mapview-websocket@ will see the updates and broadcast them to clients as
 -- soon as it can.
-initWebsocketServer :: Chan.Chan BS.ByteString -> String -> Int -> IO ()
-initWebsocketServer chan host port = do
+initWebsocketServer
+  :: Chan.Chan BS.ByteString
+  -> String
+  -> Int
+  -> [WebsocketOnConnectCallback]
+  -> IO ()
+initWebsocketServer chan host port occs = do
   m <- newMVar []
   _ <- forkIO (broadcast chan m)
-  WS.runServer host port (application m)
+  WS.runServer host port (application m occs)
 
 addClient :: Client -> ServerState -> ServerState
 addClient = (:)
@@ -63,13 +82,14 @@ broadcast msg' clients' = forever $ do
   clients <- readMVar clients'
   sequence $ (flip Chan.writeChan msg . snd) `fmap` clients
 
-application :: MVar ServerState -> WS.ServerApp
-application st pending = do
+application :: MVar ServerState -> [WebsocketOnConnectCallback] -> WS.ServerApp
+application st occs pending = do
   conn <- WS.acceptRequest pending
   uuid <- UUIDv4.nextRandom
   chan <- Chan.newChan
   putStrLn $ "New client: " ++ UUID.toString uuid
   let client = (UUID.toString uuid, chan)
+  mapM_ (flip callOnConnectCallback client) occs
   liftIO $ modifyMVar_ st $ \s -> do
     let s' = addClient client s
     return s'
